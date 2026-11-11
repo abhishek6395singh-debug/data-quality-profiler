@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Data Quality Profiler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column workbench. Source bar, then a score strip (overall grade plus four dimensions), then tabbed detail. Tables scroll inside their own box. */
+:root {
+  --bg: #EEF1F6;
+  --surface: #FFFFFF;
+  --ink: #16202F;
+  --muted: #586376;
+  --line: #D5DBE6;
+  --accent: #2D4BD4;
+  --accent-ink: #FFFFFF;
+  --accent-soft: #E2E8FC;
+  --good: #17713F;
+  --good-soft: #DAF0E3;
+  --warn: #8A5A00;
+  --warn-soft: #F7EBC8;
+  --bad: #B22E2A;
+  --bad-soft: #F8DDDA;
+  --info: #3C4F6B;
+  --info-soft: #E4E9F1;
+  --font-body: 'Schibsted Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1623; --surface: #172033; --ink: #E6ECF6; --muted: #98A4BA; --line: #2B3850;
+    --accent: #8EA2FF; --accent-ink: #0B1228; --accent-soft: #212C52;
+    --good: #5FCB93; --good-soft: #143426; --warn: #E3B352; --warn-soft: #3A2B0E;
+    --bad: #F2877F; --bad-soft: #3D1D1A; --info: #A9B8D0; --info-soft: #222E45;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1623; --surface: #172033; --ink: #E6ECF6; --muted: #98A4BA; --line: #2B3850;
+  --accent: #8EA2FF; --accent-ink: #0B1228; --accent-soft: #212C52;
+  --good: #5FCB93; --good-soft: #143426; --warn: #E3B352; --warn-soft: #3A2B0E;
+  --bad: #F2877F; --bad-soft: #3D1D1A; --info: #A9B8D0; --info-soft: #222E45;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink);
+  font: 400 15px/1.5 var(--font-body);
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1, h2, h3, p, dl, dd, ul { margin: 0; padding: 0; }
+h1 { font: 800 clamp(1.8rem, 4.6vw, 2.6rem)/1.05 var(--font-body); letter-spacing: -0.02em; text-wrap: balance; }
+h2 { font: 700 1.05rem/1.25 var(--font-body); text-wrap: balance; }
+.eyebrow { font: 500 0.72rem/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+.lede { color: var(--muted); max-width: 64ch; margin-top: 10px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 18px; min-width: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button { font: inherit; cursor: pointer; }
+.btn { font: 600 0.88rem var(--font-body); padding: 9px 14px; min-height: 40px; border-radius: 4px; border: 1px solid var(--accent); background: var(--accent); color: var(--accent-ink); }
+.btn.ghost { background: transparent; color: var(--accent); }
+.btn:disabled { opacity: .55; cursor: default; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+select, input[type="text"], input[type="search"], input[type="number"] {
+  height: 40px; padding: 0 10px; font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 4px; min-width: 0; max-width: 100%;
+}
+
+/* source */
+.source { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; align-items: stretch; }
+@media (max-width: 760px) { .source { grid-template-columns: minmax(0, 1fr); } }
+.drop { border: 1.5px dashed var(--line); border-radius: 6px; padding: 18px; display: flex; flex-direction: column; gap: 10px; justify-content: center; background: var(--bg); }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.fileinfo { display: flex; flex-direction: column; gap: 8px; justify-content: center; min-width: 0; }
+.fname { font: 600 1.05rem var(--font-body); overflow-wrap: anywhere; }
+.facts { display: flex; gap: 8px 18px; flex-wrap: wrap; font: 400 0.86rem var(--font-mono); color: var(--muted); }
+.notice { font-size: 0.86rem; padding: 8px 10px; border-radius: 4px; background: var(--info-soft); color: var(--info); }
+.notice.err { background: var(--bad-soft); color: var(--bad); }
+.notice.warn { background: var(--warn-soft); color: var(--warn); }
+
+/* score */
+.score { display: grid; grid-template-columns: minmax(0, 17rem) minmax(0, 1fr); gap: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+@media (max-width: 760px) { .score { grid-template-columns: minmax(0, 1fr); } }
+.grade { --st: var(--info); --st-soft: var(--info-soft); background: var(--st-soft); padding: 20px; display: flex; flex-direction: column; gap: 10px; justify-content: center; }
+.grade.good { --st: var(--good); --st-soft: var(--good-soft); }
+.grade.warn { --st: var(--warn); --st-soft: var(--warn-soft); }
+.grade.bad { --st: var(--bad); --st-soft: var(--bad-soft); }
+.label { font: 500 0.72rem/1 var(--font-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.big { font: 600 clamp(2.6rem, 8vw, 3.6rem)/1 var(--font-mono); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.big small { font-size: 1rem; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+.pill { display: inline-block; font: 600 0.72rem/1 var(--font-mono); letter-spacing: 0.06em; text-transform: uppercase; padding: 6px 9px; border-radius: 3px; border: 1px solid currentColor; white-space: nowrap; }
+.pill.good { color: var(--good); background: var(--good-soft); }
+.pill.warn { color: var(--warn); background: var(--warn-soft); }
+.pill.bad { color: var(--bad); background: var(--bad-soft); }
+.pill.info { color: var(--info); background: var(--info-soft); }
+.grade .pill { background: var(--surface); align-self: flex-start; }
+.dims { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; padding: 20px; align-content: center; }
+@media (max-width: 520px) { .dims { grid-template-columns: minmax(0, 1fr); } }
+.dim-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.dim-name { font-weight: 600; }
+.dim-val { font: 600 1.1rem var(--font-mono); font-variant-numeric: tabular-nums; }
+.meter { height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; margin: 6px 0 4px; }
+.meter i { display: block; height: 100%; background: var(--st, var(--accent)); border-radius: 4px; }
+.meter.good i { --st: var(--good); } .meter.warn i { --st: var(--warn); } .meter.bad i { --st: var(--bad); }
+.dim-note { font-size: 0.8rem; color: var(--muted); }
+details.how { grid-column: 1 / -1; border-top: 1px solid var(--line); padding: 12px 20px; font-size: 0.88rem; color: var(--muted); }
+details.how summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+details.how p { margin-top: 8px; max-width: 80ch; }
+
+/* tabs */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: -6px 0 16px; overflow-x: auto; }
+.tabs button { border: 0; background: transparent; padding: 10px 14px; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; font-weight: 500; }
+.tabs button[aria-selected="true"] { color: var(--accent); border-color: var(--accent); font-weight: 700; }
+.tabs .count { font: 500 0.72rem var(--font-mono); background: var(--info-soft); color: var(--info); border-radius: 10px; padding: 2px 7px; margin-left: 6px; }
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { width: 100%; border-collapse: collapse; min-width: 640px; }
+th { text-align: left; font: 500 0.7rem/1 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); background: var(--bg); padding: 11px 12px; white-space: nowrap; }
+td { padding: 10px 12px; border-top: 1px solid var(--line); font-size: 0.9rem; vertical-align: top; }
+td.v { font-family: var(--font-mono); font-size: 0.82rem; overflow-wrap: anywhere; max-width: 22rem; }
+td.n, th.n { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--bg); }
+tr.detail td { background: var(--bg); }
+.bar { display: inline-block; width: 70px; height: 6px; background: var(--line); border-radius: 3px; vertical-align: middle; margin-right: 8px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.sev { display: inline-block; font: 600 0.68rem/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; padding: 4px 7px; border-radius: 3px; }
+.sev.High { background: var(--bad-soft); color: var(--bad); }
+.sev.Medium { background: var(--warn-soft); color: var(--warn); }
+.sev.Low { background: var(--info-soft); color: var(--info); }
+.sev.Info { background: var(--accent-soft); color: var(--accent); }
+.issue { display: grid; grid-template-columns: 5.5rem minmax(0, 1fr) auto; gap: 4px 14px; padding: 12px 0; border-top: 1px solid var(--line); align-items: start; }
+.issue:first-child { border-top: 0; padding-top: 0; }
+.issue h3 { font: 600 0.95rem/1.35 var(--font-body); }
+.issue p { color: var(--muted); font-size: 0.86rem; margin-top: 2px; overflow-wrap: anywhere; }
+.issue .cnt { font: 500 0.9rem var(--font-mono); text-align: right; white-space: nowrap; }
+@media (max-width: 560px) { .issue { grid-template-columns: minmax(0, 1fr); } .issue .cnt { text-align: left; } }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: 10px 18px; }
+.stats dt { font: 500 0.68rem/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.stats dd { font: 500 0.95rem var(--font-mono); margin-top: 4px; overflow-wrap: anywhere; }
+
+/* rules */
+.rule { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 6px 14px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.rule:first-of-type { border-top: 0; }
+.rule .nm { font-weight: 600; overflow-wrap: anywhere; }
+.rule .meta { font-size: 0.82rem; color: var(--muted); }
+.rule input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--accent); }
+.rule .x { border: 0; background: transparent; color: var(--bad); font-size: 1.2rem; padding: 4px 8px; }
+.rule .res { font: 500 0.82rem var(--font-mono); text-align: right; white-space: nowrap; }
+@media (max-width: 560px) { .rule { grid-template-columns: auto minmax(0, 1fr) auto; } .rule .res { grid-column: 2 / -1; text-align: left; } }
+.addrule { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-top: 16px; padding-top: 16px; border-top: 2px solid var(--line); }
+.addrule label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+.filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+textarea.out { width: 100%; min-height: 20rem; font: 400 0.82rem/1.5 var(--font-mono); color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 12px; resize: vertical; }
+.foot { color: var(--muted); font-size: 0.8rem; max-width: 86ch; }
+.empty { padding: 24px; text-align: center; color: var(--muted); }
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <p class="eyebrow">Data Management Services</p>
+    <h1>Data Quality Profiler</h1>
+    <p class="lede">Check a client file before it is loaded. You get a quality score, the rows that fail and why, and a summary you can paste into a ticket or an email. The file is read in your browser and is not uploaded anywhere.</p>
+  </header>
+
+  <section class="panel source" aria-label="Source file">
+    <div class="drop" id="drop">
+      <h2>Load a file</h2>
+      <p class="muted">Drop a CSV, TSV, pipe-delimited or Excel file here. Only the first sheet of a workbook is read, as displayed in Excel.</p>
+      <div class="row">
+        <label class="btn" for="file" tabindex="0" id="fileLabel">Choose file</label>
+        <input type="file" id="file" accept=".csv,.tsv,.txt,.psv,.xlsx,.xls,.xlsm">
+        <button class="btn ghost" type="button" id="sampleBtn">Use sample data</button>
+      </div>
+    </div>
+    <div class="fileinfo" id="fileinfo"></div>
+  </section>
+
+  <section class="score" id="score" aria-live="polite"></section>
+
+  <section class="panel" id="detail">
+    <div class="tabs" role="tablist" id="tabs"></div>
+    <div id="tabbody"></div>
+  </section>
+
+  <p class="foot">Checks run on text exactly as it appears in the file. Row numbers count the header as row 1, so they match what you see in Excel. Text files are read as UTF-8 and up to 250,000 rows are checked. The currency check uses a list of 40 common ISO 4217 codes, so an unusual but valid code shows up as unknown. The sample is synthetic and contains no real investors or securities.</p>
+</div>
+
+<script>
+'use strict';
+var $ = function (id) { return document.getElementById(id); };
+var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+var MAX_ROWS = 250000;
+
+/* ---------- value checks ---------- */
+var NULLISH = /^(null|n\/a|#n\/a|none|nan|-|--|\?)$/i;
+var NUM = /^[+-]?(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?$/;
+var NUMC = /^[+-]?\d{1,3}(,\d{3})+(\.\d+)?$/;
+var BOOL = /^(true|false|yes|no|y|n)$/i;
+var EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+var ISINSHAPE = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
+var CCY = new Set('USD EUR GBP JPY CHF AUD CAD NZD SEK NOK DKK SGD HKD CNY INR KRW BRL MXN ZAR PLN CZK HUF TRY AED SAR ILS THB MYR IDR PHP TWD CLP COP RON RUB ISK EGP KWD QAR'.split(' '));
+var MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+var AMBIG = 'DD/MM/YYYY or MM/DD/YYYY';
+
+function isMissing(v) { var t = String(v).trim(); return t === '' || NULLISH.test(t); }
+function isNum(t) { return NUM.test(t) || NUMC.test(t); }
+function toNum(t) { return parseFloat(t.replace(/,/g, '')); }
+function validYMD(y, m, d) {
+  if (y < 1900 || y > 2100 || m < 1 || m > 12 || d < 1) return false;
+  return d <= new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+function dateFormat(t) {
+  var m;
+  if ((m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ]\d{2}:\d{2}(?::\d{2})?)?$/.exec(t))) return validYMD(+m[1], +m[2], +m[3]) ? 'YYYY-MM-DD' : null;
+  if ((m = /^(\d{4})\/(\d{2})\/(\d{2})$/.exec(t))) return validYMD(+m[1], +m[2], +m[3]) ? 'YYYY/MM/DD' : null;
+  if ((m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(t))) {
+    var a = +m[1], b = +m[2], y = +m[3];
+    if (a > 12 && b <= 12 && validYMD(y, b, a)) return 'DD/MM/YYYY';
+    if (b > 12 && a <= 12 && validYMD(y, a, b)) return 'MM/DD/YYYY';
+    if (a <= 12 && b <= 12 && validYMD(y, b, a)) return AMBIG;
+    return null;
+  }
+  if ((m = /^(\d{1,2})[- ]([A-Za-z]{3})[A-Za-z]*[- ,]+(\d{4})$/.exec(t))) {
+    var mo = MON[m[2].toLowerCase()];
+    return mo && validYMD(+m[3], mo, +m[1]) ? 'DD-Mon-YYYY' : null;
+  }
+  if ((m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(t))) return validYMD(+m[3], +m[2], +m[1]) ? 'DD.MM.YYYY' : null;
+  return null;
+}
+function isinOk(s) {
+  if (!ISINSHAPE.test(s)) return false;
+  var d = '';
+  for (var i = 0; i < s.length; i++) { var c = s[i]; d += /[A-Z]/.test(c) ? String(c.charCodeAt(0) - 55) : c; }
+  var sum = 0, dbl = false;
+  for (var j = d.length - 1; j >= 0; j--) { var n = +d[j]; if (dbl) { n *= 2; if (n > 9) n -= 9; } sum += n; dbl = !dbl; }
+  return sum % 10 === 0;
+}
+function quant(sorted, q) {
+  var pos = (sorted.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+}
+function fmtN(n) { return Math.abs(n) >= 1000 ? Math.round(n).toLocaleString('en-US') : String(Math.round(n * 100) / 100); }
+function pct(n, d) { return d ? (n / d * 100) : 0; }
+function pctTxt(x) { return (Math.round(x * 10) / 10).toFixed(1) + '%'; }
+
+/* ---------- parsing ---------- */
+function detectDelimiter(text) {
+  var lines = text.slice(0, 20000).split(/\r?\n/).filter(function (l) { return l.length; }).slice(0, 6);
+  var best = ',', bestScore = -1;
+  [',', ';', '\t', '|'].forEach(function (d) {
+    var counts = lines.map(function (l) { var q = false, c = 0; for (var i = 0; i < l.length; i++) { if (l[i] === '"') q = !q; else if (l[i] === d && !q) c++; } return c; });
+    if (!counts.length) return;
+    var same = counts.every(function (c) { return c === counts[0]; });
+    var score = same ? counts[0] : Math.min.apply(null, counts) / 2;
+    if (score > bestScore) { bestScore = score; best = d; }
+  });
+  return best;
+}
+function parseDelimited(text, d) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  var rows = [], row = [], f = '', q = false, i = 0, n = text.length;
+  while (i < n) {
+    var c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { f += '"'; i += 2; continue; } q = false; i++; continue; }
+      f += c; i++; continue;
+    }
+    if (c === '"' && f === '') { q = true; i++; continue; }
+    if (c === d) { row.push(f); f = ''; i++; continue; }
+    if (c === '\r') { if (text[i + 1] === '\n') i++; row.push(f); rows.push(row); row = []; f = ''; i++; continue; }
+    if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; i++; continue; }
+    f += c; i++;
+  }
+  if (f !== '' || row.length) { row.push(f); rows.push(row); }
+  return rows;
+}
+
+/* ---------- build the table from a matrix ---------- */
+var state = null;
+function fromMatrix(matrix, name, meta) {
+  matrix = matrix.filter(function (r) { return r.some(function (c) { return String(c).trim() !== ''; }); });
+  if (!matrix.length) throw new Error('The file has no data.');
+  var seen = {}, H = matrix[0].map(function (h, i) {
+    var base = String(h).trim() || ('Column ' + (i + 1)), k = base, n = 2;
+    while (seen[k]) k = base + ' (' + (n++) + ')';
+    seen[k] = 1; return k;
+  });
+  var body = matrix.slice(1), notes = [];
+  if (body.length > MAX_ROWS) { notes.push('Only the first ' + MAX_ROWS.toLocaleString('en-US') + ' of ' + body.length.toLocaleString('en-US') + ' rows were checked.'); body = body.slice(0, MAX_ROWS); }
+  var shape = [];
+  var rows = body.map(function (r, i) {
+    r = r.map(function (c) { return String(c == null ? '' : c); });
+    if (r.length !== H.length) { shape.push({ row: i + 2, count: r.length }); r = r.length > H.length ? r.slice(0, H.length) : r.concat(new Array(H.length - r.length).fill('')); }
+    return r;
+  });
+  return { name: name, headers: H, rows: rows, shape: shape, meta: meta || '', notes: notes };
+}
+
+/* ---------- analysis ---------- */
+function profileCol(c) {
+  var R = state.rows;
+  var p = { n: 0, missing: 0, placeholders: 0, ws: 0, tc: { number: 0, date: 0, boolean: 0, text: 0 }, counts: new Map(), fmt: new Map(), nums: [], minLen: Infinity, maxLen: 0, isin: 0, ccy: 0, email: 0 };
+  for (var i = 0; i < R.length; i++) {
+    var raw = R[i][c], t = raw.trim();
+    if (t === '' || NULLISH.test(t)) { p.missing++; if (t !== '') p.placeholders++; continue; }
+    p.n++;
+    if (raw !== t) p.ws++;
+    p.counts.set(t, (p.counts.get(t) || 0) + 1);
+    if (t.length < p.minLen) p.minLen = t.length;
+    if (t.length > p.maxLen) p.maxLen = t.length;
+    var ty;
+    if (isNum(t)) { ty = 'number'; p.nums.push(toNum(t)); }
+    else { var f = dateFormat(t); if (f) { ty = 'date'; p.fmt.set(f, (p.fmt.get(f) || 0) + 1); } else ty = BOOL.test(t) ? 'boolean' : 'text'; }
+    p.tc[ty]++;
+    if (ISINSHAPE.test(t)) p.isin++;
+    if (t.length === 3 && CCY.has(t.toUpperCase())) p.ccy++;
+    if (EMAIL.test(t)) p.email++;
+  }
+  var dom = 'text', best = -1;
+  for (var k in p.tc) { if (p.tc[k] > best) { best = p.tc[k]; dom = k; } }
+  p.type = p.n === 0 ? 'empty' : (best / p.n >= 0.85 ? dom : 'mixed');
+  p.off = (p.type === 'mixed' || p.type === 'empty') ? 0 : p.n - best;
+  p.distinct = p.counts.size;
+  if (p.fmt.has(AMBIG)) {
+    var dm = p.fmt.get('DD/MM/YYYY') || 0, md = p.fmt.get('MM/DD/YYYY') || 0;
+    if (dm || md) { p.amb = dm >= md ? 'DD/MM/YYYY' : 'MM/DD/YYYY'; p.fmt.set(p.amb, (p.fmt.get(p.amb) || 0) + p.fmt.get(AMBIG)); p.fmt.delete(AMBIG); }
+  }
+  var db = -1; p.dateDom = '';
+  p.fmt.forEach(function (v, k2) { if (v > db) { db = v; p.dateDom = k2; } });
+  p.top = Array.from(p.counts.entries()).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 5);
+  if (p.type === 'number' && p.nums.length) {
+    p.sorted = p.nums.slice().sort(function (a, b) { return a - b; });
+    p.min = p.sorted[0]; p.max = p.sorted[p.sorted.length - 1];
+    p.mean = p.nums.reduce(function (a, b) { return a + b; }, 0) / p.nums.length;
+    p.median = quant(p.sorted, 0.5);
+  }
+  return p;
+}
+function buildConsistency() {
+  var out = [], R = state.rows;
+  state.cols.forEach(function (p, c) {
+    if (p.n === 0) return;
+    var grp = new Map(), catLimit = Math.max(50, R.length * 0.05), minor = new Map();
+    if (p.counts.size <= catLimit && (p.type === 'text' || p.type === 'mixed' || p.type === 'boolean')) {
+      p.counts.forEach(function (k, v) {
+        if (isNum(v) || dateFormat(v)) return;
+        var lk = v.toLowerCase(), g = grp.get(lk); if (!g) { g = new Map(); grp.set(lk, g); } g.set(v, k);
+      });
+    }
+    grp.forEach(function (g) {
+      if (g.size < 2) return;
+      var dom = null, b = -1; g.forEach(function (k, v) { if (k > b) { b = k; dom = v; } });
+      g.forEach(function (k, v) { if (v !== dom) minor.set(v, dom); });
+    });
+    if (!(p.ws > 0 || minor.size > 0 || p.fmt.size > 1)) return;
+    for (var i = 0; i < R.length; i++) {
+      var raw = R[i][c], t = raw.trim();
+      if (t === '' || NULLISH.test(t)) continue;
+      if (raw !== t) out.push({ row: i + 2, col: c, value: raw, issue: 'Extra spaces', detail: 'Leading or trailing space', kind: 'consistency' });
+      if (minor.has(t)) out.push({ row: i + 2, col: c, value: raw, issue: 'Inconsistent case', detail: 'Most common form is "' + minor.get(t) + '"', kind: 'consistency' });
+      if (p.fmt.size > 1) {
+        var f = dateFormat(t);
+        if (f) { if (f === AMBIG && p.amb) f = p.amb; if (f !== p.dateDom) out.push({ row: i + 2, col: c, value: raw, issue: 'Mixed date format', detail: f + '; most common is ' + p.dateDom, kind: 'consistency' }); }
+      }
+    }
+  });
+  state.consistency = out;
+}
+function buildOutliers() {
+  var out = [];
+  state.cols.forEach(function (p, c) {
+    if (p.type !== 'number' || p.nums.length < 20) return;
+    var q1 = quant(p.sorted, 0.25), q3 = quant(p.sorted, 0.75), iqr = q3 - q1;
+    if (iqr <= 0) return;
+    var lo = q1 - 3 * iqr, hi = q3 + 3 * iqr;
+    for (var i = 0; i < state.rows.length; i++) {
+      var t = state.rows[i][c].trim();
+      if (!isNum(t)) continue;
+      var v = toNum(t);
+      if (v < lo || v > hi) out.push({ row: i + 2, col: c, value: t, issue: 'Outlier', detail: 'Far outside the usual range (' + fmtN(q1) + ' to ' + fmtN(q3) + ')', kind: 'info' });
+    }
+  });
+  state.outliers = out;
+}
+function buildStructure() {
+  var out = [], seen = new Map(), dup = [];
+  state.shape.forEach(function (s) { out.push({ row: s.row, col: -1, value: '', issue: 'Wrong number of fields', detail: 'Row has ' + s.count + ' fields, header has ' + state.headers.length, kind: 'structure' }); });
+  state.rows.forEach(function (r, i) {
+    var key = r.join('\u0001');
+    if (seen.has(key)) { dup.push(i); out.push({ row: i + 2, col: -1, value: '', issue: 'Duplicate row', detail: 'Same as row ' + (seen.get(key) + 2), kind: 'structure' }); }
+    else seen.set(key, i);
+  });
+  state.structure = out; state.fullDup = dup;
+}
+
+/* ---------- rules ---------- */
+var RULE_LABEL = { required: 'Required', unique: 'Unique', number: 'Is a number', date: 'Is a valid date', range: 'Within range', list: 'Allowed values', pattern: 'Matches pattern', isin: 'Valid ISIN', currency: 'Valid currency code', email: 'Valid email' };
+var HINT = {
+  'Required': 'Ask the source to supply the missing values, or agree a default with the client.',
+  'Unique': 'Confirm which record is correct and remove or re-key the repeats.',
+  'Is a number': 'Check for text, symbols or placeholders in the numeric field.',
+  'Is a valid date': 'Confirm the date format with the source and correct impossible dates.',
+  'Within range': 'Confirm whether these values are errors or genuine extremes.',
+  'Allowed values': 'Map the unexpected values to the allowed set or agree an addition.',
+  'Matches pattern': 'Check the values against the agreed format.',
+  'Valid ISIN': 'Request corrected identifiers from the source or check them against reference data.',
+  'Valid currency code': 'Ask for three-letter ISO codes in upper case.',
+  'Valid email': 'Ask the source to correct the addresses or mark them as not supplied.',
+  'Extra spaces': 'Trim the values before loading.',
+  'Inconsistent case': 'Standardise the case before loading.',
+  'Mixed date format': 'Agree one date format with the source, or convert before loading.',
+  'Outlier': 'Check with the source whether the value is correct.',
+  'Wrong number of fields': 'Look for an unquoted delimiter inside a value, or a truncated line.',
+  'Duplicate row': 'Remove the repeated rows or confirm they are separate records.'
+};
+var TITLE = { 'Required': 'Missing values', 'Unique': 'Duplicate values', 'Is a number': 'Non-numeric values', 'Is a valid date': 'Invalid dates', 'Within range': 'Values out of range', 'Allowed values': 'Values not allowed', 'Matches pattern': 'Values off pattern', 'Valid ISIN': 'Invalid ISINs', 'Valid currency code': 'Invalid currency codes', 'Valid email': 'Invalid email addresses', 'Outlier': 'Outliers' };
+function issueTitle(g) { return (TITLE[g.issue] || g.issue) + (g.col >= 0 ? ' in ' + state.headers[g.col] : ''); }
+function ruleText(r) {
+  var s = RULE_LABEL[r.type];
+  if (r.type === 'range') s += ' ' + (r.min !== '' ? r.min : 'no minimum') + ' to ' + (r.max !== '' ? r.max : 'no maximum');
+  if (r.type === 'list') s += ': ' + r.values;
+  if (r.type === 'pattern') s += ': ' + r.pattern;
+  return s;
+}
+function suggestAll() {
+  var rules = [], id = 1;
+  state.cols.forEach(function (p, c) {
+    var nm = state.headers[c], nn = p.n;
+    if (!nn) return;
+    function add(type) { rules.push({ id: id++, col: c, type: type, enabled: true, source: 'Suggested', min: '', max: '', values: '', pattern: '' }); }
+    var idLike = /(^|[^a-z])(id|key|ref|reference|code|number|no)$/i.test(nm) || /\bid\b/i.test(nm);
+    var mp = pct(p.missing, state.rows.length);
+    if (mp > 0 && mp <= 2) add('required');
+    if (idLike && p.distinct >= 0.9 * nn) add('unique');
+    var share = function (k) { return p.tc[k] / nn; };
+    if (/isin/i.test(nm) || p.isin / nn >= 0.8) add('isin');
+    else if (/(^|\W)(ccy|currency)(\W|$)/i.test(nm) || p.ccy / nn >= 0.8) add('currency');
+    else if (/mail/i.test(nm) || p.email / nn >= 0.8) add('email');
+    else if (!idLike && share('date') >= 0.6) add('date');
+    else if (!idLike && share('number') >= 0.6) {
+      add('number');
+      if (/(qty|quantity|price|amount|value|nav|units|shares|balance)/i.test(nm)) { add('range'); rules[rules.length - 1].min = '0'; }
+    }
+  });
+  return rules;
+}
+function testRule(r, t) {
+  switch (r.type) {
+    case 'number': return isNum(t) ? null : 'Not a number';
+    case 'date': return dateFormat(t) ? null : 'Not a valid date';
+    case 'range':
+      if (!isNum(t)) return r._skip ? null : 'Not a number';
+      var n = toNum(t);
+      if (r.min !== '' && n < +r.min) return 'Below ' + r.min;
+      if (r.max !== '' && n > +r.max) return 'Above ' + r.max;
+      return null;
+    case 'list': return r._set.has(t) ? null : 'Not in the allowed list';
+    case 'pattern': return r._re.test(t) ? null : 'Does not match the pattern';
+    case 'isin': return !ISINSHAPE.test(t) ? 'Malformed ISIN' : (isinOk(t) ? null : 'Check digit fails');
+    case 'currency': return t.length === 3 && CCY.has(t) ? null : 'Unknown currency code';
+    case 'email': return EMAIL.test(t) ? null : 'Not a valid email address';
+  }
+  return null;
+}
+function evaluate() {
+  var R = state.rows, fails = [], vChecks = 0, vFails = 0, reqCells = 0, reqMissing = 0, reqCols = 0, dupRows = new Set(state.fullDup);
+  var numCols = new Set(state.rules.filter(function (r) { return r.enabled && r.type === 'number'; }).map(function (r) { return r.col; }));
+  state.rules.forEach(function (r) {
+    r.err = ''; r.checks = 0; r.fails = 0;
+    if (!r.enabled) return;
+    if (r.type === 'range') r._skip = numCols.has(r.col);
+    if (r.type === 'pattern') { try { r._re = new RegExp('^(?:' + r.pattern + ')$'); } catch (e) { r.err = 'Invalid pattern'; return; } }
+    if (r.type === 'list') { r._set = new Set(r.values.split(',').map(function (x) { return x.trim(); }).filter(Boolean)); if (!r._set.size) { r.err = 'No values listed'; return; } }
+    var c = r.col, label = RULE_LABEL[r.type];
+    if (r.type === 'required') {
+      reqCols++;
+      for (var i = 0; i < R.length; i++) { reqCells++; r.checks++; if (isMissing(R[i][c])) { reqMissing++; r.fails++; fails.push({ row: i + 2, col: c, value: R[i][c], issue: label, detail: 'Missing value', kind: 'rule' }); } }
+    } else if (r.type === 'unique') {
+      var first = new Map();
+      for (var j = 0; j < R.length; j++) {
+        var raw = R[j][c], t = raw.trim();
+        if (isMissing(raw)) continue;
+        r.checks++;
+        if (first.has(t)) { r.fails++; dupRows.add(j); fails.push({ row: j + 2, col: c, value: raw, issue: label, detail: 'Duplicate of row ' + (first.get(t) + 2), kind: 'rule' }); }
+        else first.set(t, j);
+      }
+    } else {
+      for (var k = 0; k < R.length; k++) {
+        var rw = R[k][c], tt = rw.trim();
+        if (isMissing(rw)) continue;
+        r.checks++; vChecks++;
+        var d = testRule(r, tt);
+        if (d) { r.fails++; vFails++; fails.push({ row: k + 2, col: c, value: rw, issue: label, detail: d, kind: 'rule' }); }
+      }
+    }
+  });
+  // row shape counts as one validity check per row
+  vChecks += R.length; vFails += state.shape.length;
+  var all = fails.concat(state.structure, state.consistency, state.outliers);
+  all.sort(function (a, b) { return a.row - b.row || a.col - b.col; });
+  state.all = all;
+  var flagged = new Set(); state.consistency.forEach(function (e) { flagged.add(e.row + ':' + e.col); });
+  var nonMissing = state.cols.reduce(function (s, p) { return s + p.n; }, 0);
+  var basisAll = reqCells === 0;
+  var comp = basisAll ? 1 - state.missingCells / Math.max(1, state.totalCells) : 1 - reqMissing / reqCells;
+  var uniq = 1 - dupRows.size / Math.max(1, R.length);
+  var valid = 1 - vFails / Math.max(1, vChecks);
+  var cons = 1 - flagged.size / Math.max(1, nonMissing);
+  var dims = [
+    { key: 'comp', label: 'Completeness', w: 30, v: comp * 100, note: basisAll ? 'Share of all cells that have a value' : 'Share of cells filled in ' + reqCols + ' required column' + (reqCols === 1 ? '' : 's') },
+    { key: 'valid', label: 'Validity', w: 35, v: valid * 100, note: vFails.toLocaleString('en-US') + ' failed of ' + vChecks.toLocaleString('en-US') + ' checks' },
+    { key: 'uniq', label: 'Uniqueness', w: 20, v: uniq * 100, note: dupRows.size.toLocaleString('en-US') + ' duplicate row' + (dupRows.size === 1 ? '' : 's') },
+    { key: 'cons', label: 'Consistency', w: 15, v: cons * 100, note: flagged.size.toLocaleString('en-US') + ' cell' + (flagged.size === 1 ? '' : 's') + ' with spacing, case or date format problems' }
+  ];
+  var badRows = new Set();
+  all.forEach(function (e) { if (e.kind !== 'info') badRows.add(e.row); });
+  var clean = R.length - badRows.size, overall = R.length ? pct(clean, R.length) : 100;
+  state.score = { overall: overall, clean: clean, status: overall >= 95 ? 'good' : overall >= 85 ? 'warn' : 'bad', label: overall >= 95 ? 'Pass' : overall >= 85 ? 'Review' : 'Fail', dims: dims };
+  // grouped issues
+  var g = new Map();
+  all.forEach(function (e) {
+    var key = e.kind + '|' + e.col + '|' + e.issue, x = g.get(key);
+    if (!x) { x = { kind: e.kind, col: e.col, issue: e.issue, count: 0, ex: [], first: e.detail }; g.set(key, x); }
+    x.count++; if (x.ex.length < 3) x.ex.push(e.kind === 'structure' ? e.detail : (e.value === '' ? '(blank)' : e.value));
+  });
+  var order = { High: 0, Medium: 1, Low: 2, Info: 3 };
+  state.groups = Array.from(g.values()).map(function (x) {
+    var p = pct(x.count, R.length);
+    x.sev = x.kind === 'info' ? 'Info' : x.kind === 'structure' ? 'High' : (p >= 5 ? 'High' : p >= 1 ? 'Medium' : 'Low');
+    x.pct = p; return x;
+  }).sort(function (a, b) { return order[a.sev] - order[b.sev] || b.count - a.count; });
+}
+
+/* ---------- load ---------- */
+function load(t, extraNotes) {
+  var t0 = performance.now();
+  state = { name: t.name, headers: t.headers, rows: t.rows, shape: t.shape, meta: t.meta, notes: (t.notes || []).concat(extraNotes || []), tab: 'overview', open: -1, fx: { col: '', issue: '', q: '' } };
+  state.cols = t.headers.map(function (n, c) { return profileCol(c); });
+  state.totalCells = t.rows.length * t.headers.length;
+  state.missingCells = state.cols.reduce(function (s, p) { return s + p.missing; }, 0);
+  buildStructure(); buildConsistency(); buildOutliers();
+  state.rules = suggestAll();
+  evaluate();
+  state.ms = Math.round(performance.now() - t0);
+  renderAll();
+}
+
+/* ---------- rendering ---------- */
+function cls(v) { return v >= 95 ? 'good' : v >= 85 ? 'warn' : 'bad'; }
+function renderSource() {
+  var s = state, sample = s.meta === 'sample';
+  var h = '<p class="label">' + (sample ? 'Sample data' : 'Current file') + '</p><p class="fname">' + esc(s.name) + '</p>' +
+    '<div class="facts"><span>' + s.rows.length.toLocaleString('en-US') + ' rows</span><span>' + s.headers.length + ' columns</span>' +
+    (s.meta && !sample ? '<span>' + esc(s.meta) + '</span>' : '') + '<span>checked in ' + s.ms + ' ms</span></div>';
+  if (sample) h += '<p class="notice">This is a synthetic file with problems added on purpose. Load your own file to replace it.</p>';
+  if (s.sheets && s.sheets.length > 1) h += '<label class="row muted" for="sheet">Sheet <select id="sheet">' + s.sheets.map(function (n) { return '<option' + (n === s.sheet ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select></label>';
+  s.notes.forEach(function (n) { h += '<p class="notice warn">' + esc(n) + '</p>'; });
+  if (s.err) h += '<p class="notice err">' + esc(s.err) + '</p>';
+  $('fileinfo').innerHTML = h;
+}
+function renderScore() {
+  var sc = state.score, hi = state.groups.filter(function (g) { return g.sev === 'High'; }).length;
+  var h = '<div class="grade ' + sc.status + '"><p class="label">Rows passing every check</p><p class="big">' + (Math.round(sc.overall * 10) / 10).toFixed(1) + '<small>%</small></p><span class="pill ' + sc.status + '">' + sc.label + '</span>' +
+    '<p class="muted">' + sc.clean.toLocaleString('en-US') + ' of ' + state.rows.length.toLocaleString('en-US') + ' rows are clean. ' + state.groups.length + ' issue type' + (state.groups.length === 1 ? '' : 's') + ', ' + hi + ' high severity.</p></div><div class="dims"><p class="label" style="grid-column:1/-1">Cell-level checks</p>';
+  sc.dims.forEach(function (d) {
+    h += '<div><div class="dim-top"><span class="dim-name">' + d.label + '</span><span class="dim-val">' + pctTxt(d.v) + '</span></div><div class="meter ' + cls(d.v) + '" role="img" aria-label="' + d.label + ' ' + pctTxt(d.v) + '"><i style="width:' + Math.max(0, Math.min(100, d.v)).toFixed(1) + '%"></i></div><p class="dim-note">' + esc(d.note) + '</p></div>';
+  });
+  h += '</div><details class="how"><summary>How the score works</summary><p>The headline number is the share of rows that pass every check, so one bad cell makes its whole row fail. Pass is 95% or above, Review is 85% to 94.9% and Fail is below 85%. The four bars measure cells and show where the problems are. Completeness uses the columns with a Required rule, or every column when none is set. Validity counts every enabled rule except Required and Unique, plus one row-shape check per row. Uniqueness counts rows that repeat an earlier row or repeat a value in a Unique column. Consistency counts cells with extra spaces, mixed case or a minority date format. A cell can count in more than one dimension. Outliers are listed for review and do not change the score.</p></details>';
+  $('score').innerHTML = h;
+}
+function colName(c) { return c < 0 ? 'All columns' : state.headers[c]; }
+function renderTabs() {
+  var items = [['overview', 'Overview'], ['columns', 'Columns'], ['rules', 'Rules'], ['exceptions', 'Exceptions'], ['summary', 'Summary']];
+  $('tabs').innerHTML = items.map(function (it) {
+    var n = it[0] === 'exceptions' ? '<span class="count">' + state.all.length.toLocaleString('en-US') + '</span>' : it[0] === 'rules' ? '<span class="count">' + state.rules.filter(function (r) { return r.enabled; }).length + '</span>' : '';
+    return '<button role="tab" type="button" data-tab="' + it[0] + '" aria-selected="' + (state.tab === it[0]) + '">' + it[1] + n + '</button>';
+  }).join('');
+}
+function renderOverview() {
+  if (!state.groups.length) return '<p class="empty">No issues found with the rules that are switched on.</p>';
+  return '<h2 style="margin-bottom:14px">What to fix first</h2>' + state.groups.slice(0, 10).map(function (g) {
+    return '<div class="issue"><span><span class="sev ' + g.sev + '">' + g.sev + '</span></span><div><h3>' + esc(issueTitle(g)) + '</h3><p>' + esc(HINT[g.issue] || '') + ' Examples: <span class="mono">' + g.ex.map(esc).join(', ') + '</span></p></div><span class="cnt">' + g.count.toLocaleString('en-US') + ' (' + pctTxt(g.pct) + ')</span></div>';
+  }).join('') + (state.groups.length > 10 ? '<p class="muted" style="margin-top:12px">' + (state.groups.length - 10) + ' more issue types are in the Exceptions tab.</p>' : '');
+}
+function renderColumns() {
+  var counts = {}; state.groups.forEach(function (g) { counts[g.col] = (counts[g.col] || 0) + g.count; });
+  var h = '<div class="tbl"><table><thead><tr><th>Column</th><th>Type</th><th class="n">Missing</th><th class="n">Distinct</th><th class="n">Flagged cells</th></tr></thead><tbody>';
+  state.cols.forEach(function (p, c) {
+    var mp = pct(p.missing, state.rows.length), tl = p.type === 'empty' ? 'Empty' : p.type[0].toUpperCase() + p.type.slice(1) + (p.off ? ' (' + p.off + ' other)' : '');
+    h += '<tr class="click" data-col="' + c + '" tabindex="0"><td><strong>' + esc(state.headers[c]) + '</strong></td><td>' + tl + '</td><td class="n"><span class="bar"><i style="width:' + Math.min(100, mp).toFixed(1) + '%"></i></span>' + pctTxt(mp) + '</td><td class="n">' + p.distinct.toLocaleString('en-US') + '</td><td class="n">' + (counts[c] || 0).toLocaleString('en-US') + '</td></tr>';
+    if (state.open === c) {
+      var st = '<dl class="stats">';
+      st += '<div><dt>Values</dt><dd>' + p.n.toLocaleString('en-US') + '</dd></div>';
+      if (p.placeholders) st += '<div><dt>Placeholders as missing</dt><dd>' + p.placeholders + '</dd></div>';
+      if (p.type === 'number') st += '<div><dt>Min</dt><dd>' + fmtN(p.min) + '</dd></div><div><dt>Median</dt><dd>' + fmtN(p.median) + '</dd></div><div><dt>Mean</dt><dd>' + fmtN(p.mean) + '</dd></div><div><dt>Max</dt><dd>' + fmtN(p.max) + '</dd></div>';
+      if (p.n) st += '<div><dt>Length</dt><dd>' + p.minLen + ' to ' + p.maxLen + '</dd></div>';
+      if (p.fmt.size) st += '<div><dt>Date formats</dt><dd>' + Array.from(p.fmt.entries()).map(function (e) { return esc(e[0]) + ' (' + e[1] + ')'; }).join(', ') + '</dd></div>';
+      st += '</dl>';
+      var top = p.top.length ? '<p class="label" style="margin:14px 0 6px">Most common values</p><p class="mono">' + p.top.map(function (e) { return esc(e[0]) + ' <span class="muted">x' + e[1] + '</span>'; }).join(' &nbsp;|&nbsp; ') + '</p>' : '';
+      h += '<tr class="detail"><td colspan="5">' + st + top + '</td></tr>';
+    }
+  });
+  return h + '</tbody></table></div><p class="muted" style="margin-top:10px;font-size:.85rem">Select a column to see its statistics.</p>';
+}
+function renderRules() {
+  var h = '<p class="muted" style="margin-bottom:12px">Rules marked Suggested were chosen from the data. Switch them off or add your own. Results update straight away.</p><div>';
+  if (!state.rules.length) h += '<p class="empty">No rules yet. Add one below.</p>';
+  state.rules.forEach(function (r) {
+    h += '<div class="rule"><input type="checkbox" data-rt="' + r.id + '" ' + (r.enabled ? 'checked' : '') + ' aria-label="Enable rule"><div><div class="nm">' + esc(state.headers[r.col]) + '</div><div class="meta">' + esc(ruleText(r)) + ' &middot; ' + r.source + '</div></div>' +
+      '<div class="res">' + (r.err ? '<span style="color:var(--bad)">' + r.err + '</span>' : r.enabled ? r.fails.toLocaleString('en-US') + ' of ' + r.checks.toLocaleString('en-US') + ' fail' : 'Off') + '</div><button class="x" type="button" data-rx="' + r.id + '" aria-label="Remove rule">&times;</button></div>';
+  });
+  h += '</div><form class="addrule" id="addrule" onsubmit="return false"><label>Column<select id="ar-col">' + state.headers.map(function (n, i) { return '<option value="' + i + '">' + esc(n) + '</option>'; }).join('') + '</select></label>' +
+    '<label>Rule<select id="ar-type">' + Object.keys(RULE_LABEL).map(function (k) { return '<option value="' + k + '">' + RULE_LABEL[k] + '</option>'; }).join('') + '</select></label>' +
+    '<label id="ar-min-l" hidden>Minimum<input type="number" id="ar-min" style="width:7rem"></label><label id="ar-max-l" hidden>Maximum<input type="number" id="ar-max" style="width:7rem"></label>' +
+    '<label id="ar-vals-l" hidden>Allowed values, comma separated<input type="text" id="ar-vals" style="width:16rem"></label><label id="ar-pat-l" hidden>Pattern (whole value)<input type="text" id="ar-pat" placeholder="[A-Z]{3}[0-9]{4}" style="width:14rem"></label>' +
+    '<button class="btn" type="button" id="ar-add">Add rule</button><button class="btn ghost" type="button" id="ar-reset">Reset to suggested</button></form>';
+  return h;
+}
+function filtered() {
+  var f = state.fx, q = f.q.toLowerCase();
+  return state.all.filter(function (e) {
+    return (f.col === '' || String(e.col) === f.col) && (f.issue === '' || e.issue === f.issue) && (q === '' || String(e.value).toLowerCase().indexOf(q) >= 0 || e.detail.toLowerCase().indexOf(q) >= 0);
+  });
+}
+function renderExceptions() {
+  var f = state.fx, rows = filtered(), issues = Array.from(new Set(state.all.map(function (e) { return e.issue; }))).sort();
+  var h = '<div class="filters"><select id="fx-col" aria-label="Column"><option value="">All columns</option>' + state.headers.map(function (n, i) { return '<option value="' + i + '"' + (String(i) === f.col ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>' +
+    '<select id="fx-issue" aria-label="Issue"><option value="">All issues</option>' + issues.map(function (n) { return '<option' + (n === f.issue ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>' +
+    '<input type="search" id="fx-q" placeholder="Search values" value="' + esc(f.q) + '" aria-label="Search values">' +
+    '<button class="btn" type="button" id="dlBtn"' + (rows.length ? '' : ' disabled') + '>Download CSV</button><button class="btn ghost" type="button" id="cpBtn"' + (rows.length ? '' : ' disabled') + '>Copy CSV</button></div><p class="notice" id="exmsg" hidden></p>';
+  if (!rows.length) return h + '<p class="empty">No exceptions match.</p>';
+  h += '<p class="muted" style="margin-bottom:8px;font-size:.85rem">Showing ' + Math.min(300, rows.length).toLocaleString('en-US') + ' of ' + rows.length.toLocaleString('en-US') + '. The download has them all.</p><div class="tbl"><table><thead><tr><th class="n">Row</th><th>Column</th><th>Value</th><th>Issue</th><th>Detail</th></tr></thead><tbody>';
+  rows.slice(0, 300).forEach(function (e) {
+    h += '<tr><td class="n">' + e.row + '</td><td>' + esc(colName(e.col)) + '</td><td class="v">' + (e.value === '' ? '<span class="muted">(blank)</span>' : esc(e.value)) + '</td><td>' + esc(e.issue) + '</td><td class="muted">' + esc(e.detail) + '</td></tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+function summaryText() {
+  var s = state, sc = s.score, L = [];
+  L.push('Data quality summary: ' + s.name);
+  L.push('Checked ' + s.rows.length.toLocaleString('en-US') + ' rows and ' + s.headers.length + ' columns.');
+  L.push('Rows passing every check: ' + sc.clean.toLocaleString('en-US') + ' of ' + s.rows.length.toLocaleString('en-US') + ' (' + pctTxt(sc.overall) + ', ' + sc.label + ')');
+  L.push('Cell-level measures:');
+  sc.dims.forEach(function (d) { L.push('- ' + d.label + ': ' + pctTxt(d.v) + ' (' + d.note + ')'); });
+  L.push('');
+  var top = s.groups.filter(function (g) { return g.sev !== 'Info'; }).slice(0, 8);
+  if (top.length) {
+    L.push('Issues to fix before loading:');
+    top.forEach(function (g, i) { L.push((i + 1) + '. [' + g.sev + '] ' + issueTitle(g) + ': ' + g.count.toLocaleString('en-US') + ' (' + pctTxt(g.pct) + ' of rows). Examples: ' + g.ex.join(', ') + '. Action: ' + (HINT[g.issue] || 'Review with the source.')); });
+  } else L.push('No issues found with the rules that are switched on.');
+  var info = s.groups.filter(function (g) { return g.sev === 'Info'; });
+  if (info.length) { L.push(''); L.push('For review (not scored):'); info.forEach(function (g) { L.push('- ' + issueTitle(g) + ': ' + g.count + ' value' + (g.count === 1 ? '' : 's') + '. Examples: ' + g.ex.join(', ')); }); }
+  L.push('');
+  L.push('Rules applied: ' + s.rules.filter(function (r) { return r.enabled; }).map(function (r) { return s.headers[r.col] + ' - ' + ruleText(r); }).join('; ') + '.');
+  L.push('Row numbers count the header as row 1.');
+  return L.join('\n');
+}
+function renderSummary() {
+  return '<div class="row" style="margin-bottom:12px"><button class="btn" type="button" id="cpSum">Copy summary</button><span class="muted" id="sumMsg" role="status"></span></div><textarea class="out" id="sumText" readonly aria-label="Summary text">' + esc(summaryText()) + '</textarea>';
+}
+function renderBody() {
+  var t = state.tab;
+  $('tabbody').innerHTML = t === 'overview' ? renderOverview() : t === 'columns' ? renderColumns() : t === 'rules' ? renderRules() : t === 'exceptions' ? renderExceptions() : renderSummary();
+  if (t === 'rules') syncRuleForm();
+}
+function renderAll() { renderSource(); renderScore(); renderTabs(); renderBody(); }
+function syncRuleForm() {
+  var t = $('ar-type'); if (!t) return;
+  $('ar-min-l').hidden = $('ar-max-l').hidden = t.value !== 'range';
+  $('ar-vals-l').hidden = t.value !== 'list';
+  $('ar-pat-l').hidden = t.value !== 'pattern';
+}
+
+/* ---------- csv export ---------- */
+function csvCell(v) {
+  var s = String(v == null ? '' : v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function exceptionsCsv(rows) {
+  return ['Row,Column,Value,Issue,Detail'].concat(rows.map(function (e) { return [e.row, colName(e.col), e.value, e.issue, e.detail].map(csvCell).join(','); })).join('\r\n');
+}
+function showMsg(text, kind) { var m = $('exmsg'); if (!m) return; m.hidden = false; m.className = 'notice' + (kind ? ' ' + kind : ''); m.textContent = text; }
+function copyText(text, done, fail) {
+  try { navigator.clipboard.writeText(text).then(done, fail); } catch (e) { fail(); }
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', function (e) {
+  var t = e.target.closest('[data-tab]');
+  if (t) { state.tab = t.dataset.tab; renderTabs(); renderBody(); return; }
+  var row = e.target.closest('tr[data-col]');
+  if (row) { var c = +row.dataset.col; state.open = state.open === c ? -1 : c; renderBody(); return; }
+  var rx = e.target.closest('[data-rx]');
+  if (rx) { state.rules = state.rules.filter(function (r) { return r.id !== +rx.dataset.rx; }); refresh(); return; }
+  var id = e.target.id;
+  if (id === 'ar-add') {
+    var type = $('ar-type').value, rule = { id: Date.now(), col: +$('ar-col').value, type: type, enabled: true, source: 'Custom', min: $('ar-min').value, max: $('ar-max').value, values: $('ar-vals').value, pattern: $('ar-pat').value };
+    if (type === 'range' && rule.min === '' && rule.max === '') { alert_(); return; }
+    if (type === 'list' && !rule.values.trim()) { alert_(); return; }
+    if (type === 'pattern' && !rule.pattern) { alert_(); return; }
+    state.rules.push(rule); refresh(); return;
+  }
+  if (id === 'ar-reset') { state.rules = suggestAll(); refresh(); return; }
+  if (id === 'dlBtn') { download(); return; }
+  if (id === 'cpBtn') { var rows = filtered(); copyText(exceptionsCsv(rows), function () { showMsg('Copied ' + rows.length.toLocaleString('en-US') + ' exceptions as CSV.'); }, function () { showMsg('Copy was blocked here. Use Download CSV instead.', 'warn'); }); return; }
+  if (id === 'cpSum') { copyText(summaryText(), function () { $('sumMsg').textContent = 'Summary copied.'; }, function () { var ta = $('sumText'); ta.focus(); ta.select(); $('sumMsg').textContent = 'Copy was blocked here. The text is selected, so press copy on your keyboard.'; }); return; }
+});
+function alert_() { var f = $('addrule'); if (!f.querySelector('.notice')) { var p = document.createElement('p'); p.className = 'notice err'; p.style.width = '100%'; p.textContent = 'Fill in the rule details before adding it.'; f.appendChild(p); } }
+document.addEventListener('keydown', function (e) {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('tr[data-col]')) { e.preventDefault(); e.target.click(); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.id === 'fileLabel') { e.preventDefault(); $('file').click(); }
+});
+document.addEventListener('change', function (e) {
+  var t = e.target;
+  if (t.dataset && t.dataset.rt) { state.rules.forEach(function (r) { if (r.id === +t.dataset.rt) r.enabled = t.checked; }); refresh(); return; }
+  if (t.id === 'ar-type') { syncRuleForm(); return; }
+  if (t.id === 'fx-col') { state.fx.col = t.value; renderBody(); return; }
+  if (t.id === 'fx-issue') { state.fx.issue = t.value; renderBody(); return; }
+  if (t.id === 'sheet') { loadSheet(t.value); return; }
+  if (t.id === 'file' && t.files[0]) { openFile(t.files[0]); t.value = ''; }
+});
+var qTimer = null;
+document.addEventListener('input', function (e) {
+  if (e.target.id === 'fx-q') {
+    state.fx.q = e.target.value; clearTimeout(qTimer);
+    qTimer = setTimeout(function () { var pos = e.target.selectionStart; renderBody(); var q = $('fx-q'); if (q) { q.focus(); q.setSelectionRange(pos, pos); } }, 200);
+  }
+});
+function refresh() { evaluate(); renderScore(); renderTabs(); renderBody(); }
+$('sampleBtn').addEventListener('click', function () { load(sampleTable()); });
+var drop = $('drop');
+['dragenter', 'dragover'].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
+['dragleave', 'drop'].forEach(function (n) { drop.addEventListener(n, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
+drop.addEventListener('drop', function (e) { if (e.dataTransfer.files[0]) openFile(e.dataTransfer.files[0]); });
+
+function download() {
+  var rows = filtered(), data = exceptionsCsv(rows), name = (state.name.replace(/\.[^.]+$/, '') || 'data') + '-exceptions.csv';
+  if (!window.claude || !window.claude.use) { fallbackDownload(name, data); return; }
+  window.claude.use('downloads').then(function (dl) {
+    if (!dl) { fallbackDownload(name, data); return; }
+    return dl.save({ filename: name, data: data }).then(function () { showMsg('Saved ' + rows.length.toLocaleString('en-US') + ' exceptions.'); }, function (err) {
+      if (err && err.code === 'declined') return;
+      showMsg('The download did not go through. Use Copy CSV instead.', 'warn');
+    });
+  }, function () { fallbackDownload(name, data); });
+}
+function fallbackDownload(name, data) {
+  try {
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], { type: 'text/csv' })); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    showMsg('Download started. If nothing arrives, use Copy CSV.');
+  } catch (e) { showMsg('Download is not available here. Use Copy CSV instead.', 'warn'); }
+}
+
+/* ---------- files ---------- */
+function failLoad(msg) { if (state) { state.err = msg; renderSource(); } }
+function loadXlsxLib() {
+  return new Promise(function (res, rej) {
+    if (window.XLSX) return res();
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = function () { res(); };
+    s.onerror = function () { rej(new Error('The Excel reader could not be loaded. Save the file as CSV and try again.')); };
+    document.head.appendChild(s);
+  });
+}
+var workbook = null;
+function loadSheet(name) {
+  var ws = workbook.Sheets[name];
+  var matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+  var t = fromMatrix(matrix, state.fileName + ' / ' + name, 'Excel sheet');
+  load(t); state.sheets = workbook.SheetNames; state.sheet = name; state.fileName = state.name.split(' / ')[0]; renderSource();
+}
+function openFile(file) {
+  if (file.size > 60 * 1024 * 1024) { failLoad('That file is over 60 MB. Split it or filter it first.'); return; }
+  var ext = (file.name.split('.').pop() || '').toLowerCase();
+  if (['xlsx', 'xls', 'xlsm'].indexOf(ext) >= 0) {
+    loadXlsxLib().then(function () { return file.arrayBuffer(); }).then(function (buf) {
+      workbook = XLSX.read(buf, { type: 'array' });
+      var first = workbook.SheetNames[0];
+      var matrix = XLSX.utils.sheet_to_json(workbook.Sheets[first], { header: 1, raw: false, defval: '' });
+      var t = fromMatrix(matrix, file.name, 'Excel sheet "' + first + '"');
+      load(t); state.fileName = file.name; state.sheets = workbook.SheetNames; state.sheet = first; renderSource();
+    }).catch(function (err) { failLoad(err.message || 'That workbook could not be read.'); });
+    return;
+  }
+  file.text().then(function (text) {
+    var d = detectDelimiter(text), notes = [];
+    if (text.indexOf('\uFFFD') >= 0) notes.push('Some characters could not be read as UTF-8 and show as replacement marks.');
+    var t = fromMatrix(parseDelimited(text, d), file.name, 'delimiter ' + (d === '\t' ? 'tab' : d));
+    load(t, notes);
+  }).catch(function (err) { failLoad(err.message || 'That file could not be read.'); });
+}
+
+/* ---------- synthetic sample ---------- */
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function sampleTable() {
+  var rnd = mulberry32(11), pick = function (a) { return a[Math.floor(rnd() * a.length)]; };
+  var first = ['Amara', 'Ben', 'Chen', 'Dara', 'Elif', 'Farid', 'Grace', 'Hiro', 'Ines', 'Jonas', 'Kavya', 'Liam', 'Mira', 'Nils', 'Omar', 'Priya', 'Quinn', 'Rosa', 'Sven', 'Tara'];
+  var last = ['Abbott', 'Brandt', 'Castillo', 'Dumont', 'Eriksen', 'Fontaine', 'Gupta', 'Hartmann', 'Ito', 'Jensen', 'Kowalski', 'Lindqvist', 'Moreau', 'Novak', 'Okafor', 'Petrov', 'Quigley', 'Rossi', 'Santos', 'Tanaka'];
+  var ctry = [['GB', 'GBP'], ['US', 'USD'], ['DE', 'EUR'], ['FR', 'EUR'], ['IE', 'EUR'], ['LU', 'EUR'], ['CH', 'CHF'], ['JP', 'JPY'], ['AU', 'AUD'], ['SG', 'SGD']];
+  var isinC = ['GB', 'US', 'DE', 'FR', 'IE', 'LU', 'CH', 'JP'], alnum = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  var mons = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  var rows = [], N = 240, i;
+  for (i = 0; i < N; i++) {
+    var f = pick(first), l = pick(last), cc = pick(ctry), body = pick(isinC), k;
+    for (k = 0; k < 9; k++) body += alnum[Math.floor(rnd() * 36)];
+    var isin = body + '0'; for (var dgt = 0; dgt < 10; dgt++) { if (isinOk(body + dgt)) { isin = body + dgt; break; } }
+    var m = 1 + Math.floor(rnd() * 10), d = 1 + Math.floor(rnd() * 28);
+    rows.push(['ACC-' + String(i + 1).padStart(5, '0'), f + ' ' + l, cc[0], cc[1], isin, '2026-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0'), String(100 * (1 + Math.floor(rnd() * 500))), (5 + rnd() * 395).toFixed(2), (f + '.' + l).toLowerCase() + '@example.com', rnd() < 0.8 ? 'Active' : 'Inactive']);
+  }
+  function each(idx, fn) { idx.forEach(function (n) { fn(rows[n], n); }); }
+  each([5, 23, 48, 77, 101, 130], function (r) { r[4] = r[4].slice(0, 11) + String((+r[4][11] + 1) % 10); });
+  each([60, 115, 170], function (r) { r[4] = r[4].slice(0, 10); });
+  each([9, 88, 150, 210], function (r) { r[4] = ''; });
+  each([14, 33, 61, 92, 120], function (r) { r[3] = r[3].toLowerCase(); });
+  each([40, 104], function (r) { r[3] = 'EURO'; }); each([180], function (r) { r[3] = 'US$'; });
+  each([2, 19, 36, 52, 67, 84, 99, 118, 133, 152, 165, 188], function (r) { var p = r[5].split('-'); r[5] = (+p[2]) + '-' + mons[+p[1] - 1] + '-2026'; });
+  rows[27][5] = '2026-02-30'; rows[95][5] = '2026-13-05'; rows[160][5] = '2026-04-31';
+  each([7, 70, 140, 230], function (r) { r[5] = ''; });
+  each([11, 44, 99, 157, 201], function (r) { r[6] = 'N/A'; });
+  each([21, 81, 163], function (r) { r[6] = '-' + r[6]; });
+  rows[131][6] = '9999999';
+  each([6, 38, 72, 121, 176, 214], function (r) { r[6] = Number(r[6]).toLocaleString('en-US'); });
+  each([3, 25, 59, 100, 134, 172, 225], function (r) { r[7] = ''; });
+  each([49, 150], function (r) { r[7] = 'TBC'; });
+  var bad = ['john.smith@', 'maria at example.com', 'no-email', '@example.com', 'priya@@example.com', 'sven.example.com'];
+  [13, 66, 122, 184, 205, 236].forEach(function (n, j) { rows[n][8] = bad[j]; });
+  each([1, 18, 45, 77, 109, 138, 166, 190, 222], function (r) { r[8] = ''; });
+  each([8, 31, 55, 90, 125, 155], function (r) { r[9] = 'ACTIVE'; });
+  each([16, 64, 112, 196], function (r) { r[9] = 'active'; });
+  each([22, 71, 129, 168, 219], function (r) { r[9] = ' Active'; });
+  each([4, 26, 53, 86, 111, 144, 178, 208], function (r) { r[1] = r[1] + ' '; });
+  each([37, 119, 193], function (r) { r[2] = ''; });
+  rows[56][0] = rows[11][0]; rows[142][0] = rows[98][0];
+  rows[199] = rows[29].slice();
+  rows[100].push('extra');
+  var matrix = [['Account ID', 'Investor name', 'Country', 'Currency', 'ISIN', 'Trade date', 'Quantity', 'Price', 'Email', 'Status']].concat(rows);
+  return fromMatrix(matrix, 'investor-holdings-sample.csv', 'sample');
+}
+
+/* ---------- start ---------- */
+load(sampleTable());
+</script>
+</body>
+</html>
